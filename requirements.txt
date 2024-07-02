@@ -8,3 +8,4 @@ spacy==3.4.1
 gensim==4.2.0
 requests==2.28.1
 wikiextractor==3.0.7
+selenium
