@@ -1,0 +1,34 @@
+import sqlite3
+import binascii
+from striprtf.striprtf import rtf_to_text
+
+# Path to the SQLite database
+db_path = '/Users/andy/Library/Group Containers/group.com.apple.notes/NoteStore.sqlite'
+
+# Connect to the SQLite database
+conn = sqlite3.connect(db_path)
+cursor = conn.cursor()
+
+# Query to extract ZDATA
+cursor.execute('SELECT ZDATA FROM ZICNOTEDATA')
+rows = cursor.fetchall()
+
+# Write the decoded content to a file
+with open('notes_export_decoded.txt', 'w') as file:
+    for row in rows:
+        if row[0] is not None:
+            # Decode the BLOB data
+            try:
+                binary_data = row[0]
+                # Try to decode as plain text
+                try:
+                    text = binary_data.decode('utf-8')
+                except UnicodeDecodeError:
+                    # If decoding as plain text fails, try to interpret as RTF
+                    text = rtf_to_text(binary_data.decode('latin1'))
+                file.write(text + '\n')
+            except Exception as e:
+                file.write(f"Error decoding note: {str(e)}\n")
+
+conn.close()
+
