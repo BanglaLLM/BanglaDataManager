@@ -31,6 +31,12 @@ class NewsCrawler(ABC):
         except Exception as e:
             logging.error(f"Failed to initialize Selenium WebDriver: {e}")
             self.driver = None
+        
+        ## Intialization of beautifulsoup
+        self.soup = None
+    
+    def init_beautifulsoup(self, html_content):
+        self.soup = BeautifulSoup(html_content, 'html.parser')
     
     def check_elasticsearch(self, host, port):
         try:
