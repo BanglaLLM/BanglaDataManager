@@ -1,11 +1,8 @@
 import sys
 import os
-
-
 from datetime import datetime
 import logging
 import requests
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from news_crawler import NewsCrawler
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
