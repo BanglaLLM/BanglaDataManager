@@ -55,19 +55,19 @@ class IttefaqCrawler(NewsCrawler):
         try:
             response = requests.get(url)
             soup = BeautifulSoup(response.text, 'html.parser')
-            title = soup.find('h1', class_='title').text if soup.find('h1', class_='title') else ''
-            article_description = soup.find('article').text if soup.find('article') else ''
-            topic_list = soup.find('div', class_='topic_list').text if soup.find('div', class_='topic_list') else ''
+            headline = soup.find('h1', class_='title').text if soup.find('h1', class_='title') else ''
+            article_descriptions = soup.find('article').text if soup.find('article') else ''
+            topics = soup.find('div', class_='topic_list').text if soup.find('div', class_='topic_list') else ''
             publication_date = soup.find('span', class_='tts_time').text if soup.find('span', class_='tts_time') else ''
-            suggested_article_title = soup.find('a', class_='link_overlay')
-            suggested_article_links = 'https:' + suggested_article_title.get('href') if suggested_article_title else ''
-            logging.info(f'Article fetched: {title}')
+            suggested_article_titles = soup.find('a', class_='link_overlay')
+            suggested_article_links = 'https:' + suggested_article_titles.get('href') if suggested_article_titles else ''
+            logging.info(f'Article fetched: {headline}')
             return {
-                'title': title,
-                'article_description': article_description,
-                'topic_list': topic_list,
+                'title': headline,
+                'article_description': article_descriptions,
+                'topic_list': topics,
                 'publication_date': publication_date,
-                'suggested_article_title': suggested_article_title,
+                'suggested_article_titles': suggested_article_titles,
                 'suggested_article_links': suggested_article_links
             }
         except Exception as e:
