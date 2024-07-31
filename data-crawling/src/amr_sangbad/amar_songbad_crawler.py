@@ -48,7 +48,7 @@ class AmarSangbandCrawler(NewsCrawler):
                 article_data = {
                     'headline': soup.find('h1').text if soup.find('h1') else '',
                     'publication_date': soup.select('.post-text p')[1].text if len(soup.select('.post-text p')) > 1 else '',
-                    'article_description': soup.select_one('article').text if soup.select_one('article') else '',
+                    'article_descriptions': soup.select_one('article').text if soup.select_one('article') else '',
                     'topics': [topic.text for topic in soup.select('.tag-ul li a')],
                     'suggested_article_titles': [title.text for title in soup.select('.more-news-single .more-news-single-text h3')],
                     'suggested_article_links': [link.get('href') for link in soup.select('.more-news-single a')]
