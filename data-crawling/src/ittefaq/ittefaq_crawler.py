@@ -63,9 +63,9 @@ class IttefaqCrawler(NewsCrawler):
             suggested_article_links = 'https:' + suggested_article_titles.get('href') if suggested_article_titles else ''
             logging.info(f'Article fetched: {headline}')
             return {
-                'title': headline,
-                'article_description': article_descriptions,
-                'topic_list': topics,
+                'headline': headline,
+                'article_descriptions': article_descriptions,
+                'topics': topics,
                 'publication_date': publication_date,
                 'suggested_article_titles': suggested_article_titles,
                 'suggested_article_links': suggested_article_links
