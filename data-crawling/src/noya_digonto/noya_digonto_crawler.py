@@ -1,50 +1,77 @@
+import sys
+import os
+from datetime import datetime
+import logging
 import requests
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from news_crawler import NewsCrawler
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-from bs4 import BeautifulSoup
+# Get today's date to fetch todays all news
+TODAY_DATE = datetime.now().strftime('%Y-%m-%d')
+ARCHEIVE_URL = f'https://www.dailynayadiganta.com/archive/{TODAY_DATE}'
+BASE_URL = 'https://www.dailynayadiganta.com/'
 
-
-# TODO add those data into database model
-
-
-
-URL = 'https://www.dailynayadiganta.com/archive/2024-06-28'
-response = requests.get(URL)
-soup = BeautifulSoup(response.text, 'html.parser')
-
-
-titles = soup.select('.archive-news-list h1')
-links = soup.select('.archive-news-list a')
-# for title in titles:
-#     print(title.text)
-
-
-for link in links:
-    link = link.get('href')
-    print(link)
-    response = requests.get(link)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    headline = soup.select('.headline')
-    finding_links = soup.select_one('.article-info ul li')
-    publication_date = finding_links.find_next('li')
-    article_descriptions = soup.select('.news-content')
-    suggested_article_titles = soup.select('strong')
-    suggested_article_links = soup.select('.news-title h3 a')
-    category = soup.select('.breadcrumb li a')
+class NoyaDigontoCrawler(NewsCrawler):
+    def __init__(self, es_host='localhost', es_port=9200):
+        super().__init__(BASE_URL, es_host, es_port)
     
-    
-    
-    # for topic in category:
-    #     print(topic.text)
-    
-    
-    # for article in suggested_article:
-    #     print(article.text)
-    
-    
-    # for article in article_descriptions:
-    #     print(article.text)
+    def fetch_page(self, url):
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            self.init_beautifulsoup(response.text)
+            return self.soup
+        except requests.RequestException as e:
+            logging.error(f"Error fetching page {url}: {e}")
+            return None
 
+    def get_article_urls(self, archeive_url):
+        logging.info(f"Fetching article URLs from archive: {archeive_url}")
+        soup = self.fetch_page(archeive_url)
+        if soup:
+            links = soup.select('.archive-news-list a')
+            article_urls = [link.get('href') for link in links]
+            logging.info(f"Found {len(article_urls)} article URLs")
+            return article_urls
+        logging.warning(f"No article URLs found for archive: {archeive_url}")
+        return []
+    
+    def parse_article(self, article_url):
+        logging.info(f"Parsing article: {article_url}")
+        soup = self.fetch_page(article_url)
+        if soup:
+            article_data = {
+                'headline': soup.select_one('.headline').text if soup.select_one('.headline') else '',
+                'publication_date': soup.select_one('.article-info ul li').find_next('li').text if soup.select_one('.article-info ul li') else '',
+                'article_descriptions': [desc.text for desc in soup.select('.news-content')],
+                'suggested_article_titles': [title.text for title in soup.select('strong')],
+                'suggested_article_links': [link.get('href') for link in soup.select('.news-title h3 a')],
+                'category': [cat.text for cat in soup.select('.breadcrumb li a')]
+            }
+            logging.info(f"Successfully parsed article: {article_url}")
+            return article_data
+        logging.warning(f"Failed to parse article: {article_url}")
+        return {}
+    
+    def parse_all_articles(self, archive_url):
+        logging.info(f"Starting to parse all articles from archive: {archive_url}")
+        article_urls = self.get_article_urls(archive_url)
+        all_articles = []
+        for url in article_urls:
+            article_data = self.parse_article(url)
+            if article_data:
+                all_articles.append(article_data)
+        logging.info(f"Finished parsing all articles from archive: {archive_url}")
+        return all_articles
 
-    #  print(publication_date.text)
-    # print(publication_date.text)
-    # print(publication_date.text)
+    def crawl(self):
+        article_urls = self.get_article_urls(ARCHEIVE_URL)
+        for article_url in article_urls:
+            article_data = self.parse_article(article_url)
+            if article_data:
+                self.save_to_elasticsearch(article_data)
+
+if __name__ == '__main__':
+    crawler = NoyaDigontoCrawler()
+    crawler.crawl()
