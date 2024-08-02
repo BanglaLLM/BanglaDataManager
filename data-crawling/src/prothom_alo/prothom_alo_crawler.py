@@ -6,7 +6,7 @@ import time
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.action_chains import ActionChains
 from bs4 import BeautifulSoup
-from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
 
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,16 +21,18 @@ class ProthomAloCrawler(NewsCrawler):
         logging.info("ProthomAloCrawler initialized with ES host: %s, port: %d", es_host, es_port)
 
     def get_article_urls(self, date):
+        logging.info("Fetching article URLs for date: %s", date)
         # Convert date to timestamp (milliseconds)
         date_timestamp = int(datetime.combine(date, datetime.min.time()).timestamp() * 1000)
         next_day_timestamp = int(datetime.combine(date + timedelta(days=1), datetime.min.time()).timestamp() * 1000)
         
         search_url = f'{self.base_url}/search?published-before={next_day_timestamp}&published-after={date_timestamp}'
+        logging.info("Navigating to search URL: %s", search_url)
         self.driver.get(search_url)
         time.sleep(7)  # Wait for page to load
         while True:
             try:
-                logging.info('getting Load more button')
+                logging.info('Getting Load more button')
                 load_more_button = self.driver.find_element(By.CSS_SELECTOR, '.load-more-content')
                 logging.info('Load more button found')
                 if load_more_button:
@@ -40,7 +42,7 @@ class ProthomAloCrawler(NewsCrawler):
                     time.sleep(2)  # Wait for new content to load
                     
                     # Scroll a little bit
-                    self.driver.execute_script("window.scrollBy(0, 600);")
+                    self.driver.execute_script("window.scrollBy(0, 500);")
                     time.sleep(2)  # Wait for the page to scroll
                     
                     page_source_after = self.driver.page_source
@@ -56,7 +58,9 @@ class ProthomAloCrawler(NewsCrawler):
 
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
         links = soup.select('.headline-title a')
-        return [link.get('href') for link in links]
+        article_urls = [link.get('href') for link in links]
+        logging.info("Found %d articles after scrolling", len(article_urls))
+        return article_urls
 
     def parse_article(self, article_url):
         logging.info("Parsing article: %s", article_url)
@@ -112,20 +116,13 @@ class ProthomAloCrawler(NewsCrawler):
 def main():
     crawler = ProthomAloCrawler()
     today = datetime.now().date()
+    logging.info("Starting to crawl articles for date: %s", today)
     articles = crawler.get_all_articles_of_date(today)
-    logging.info(f"Crawled {len(articles)} articles from Prothom Alo for {today}")
+    logging.info("Crawled %d articles from Prothom Alo for %s", len(articles), today)
 
     if not crawler.es_available:
         logging.warning("Elasticsearch is not available. Articles were not saved to the database.")
         logging.info("To save articles, ensure Elasticsearch is running and modify the code to connect.")
-
-    # Optionally, you can process or save the articles in a different way here
-    # For example, you could save them to a file:
-    # with open(f'prothom_alo_articles_{today}.txt', 'w', encoding='utf-8') as f:
-    #     for article in articles:
-    #         f.write(f"Headline: {article['headline']}\n")
-    #         f.write(f"URL: {article['url']}\n")
-    #         f.write(f"Content: {article['content'][:500]}...\n\n")
 
 if __name__ == "__main__":
     main()
