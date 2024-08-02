@@ -3,11 +3,10 @@ import os
 from datetime import datetime, timedelta
 import logging
 import time
-from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.action_chains import ActionChains
 from bs4 import BeautifulSoup
-import requests
+from selenium.common.exceptions import NoSuchElementException
 
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,90 +17,112 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 class ProthomAloCrawler(NewsCrawler):
     def __init__(self, es_host='localhost', es_port=9200):
-        super().__init__('https://www.prothomalo.com', es_host, es_port)
-        self.setup_selenium()
-
-    def setup_selenium(self):
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-        self.driver = webdriver.Chrome(options=chrome_options)
+        super().__init__('https://www.prothomalo.com', es_host, es_port) # Initialize the Selenium WebDriver
+        logging.info("ProthomAloCrawler initialized with ES host: %s, port: %d", es_host, es_port)
 
     def get_article_urls(self, date):
+        logging.info("Fetching article URLs for date: %s", date)
         # Convert date to timestamp (milliseconds)
-        date_timestamp = int(date.timestamp() * 1000)
-        next_day_timestamp = int((date + timedelta(days=1)).timestamp() * 1000)
+        date_timestamp = int(datetime.combine(date, datetime.min.time()).timestamp() * 1000)
+        next_day_timestamp = int(datetime.combine(date + timedelta(days=1), datetime.min.time()).timestamp() * 1000)
         
         search_url = f'{self.base_url}/search?published-before={next_day_timestamp}&published-after={date_timestamp}'
+        logging.info("Navigating to search URL: %s", search_url)
         self.driver.get(search_url)
-        time.sleep(15)  # Wait for page to load
+        time.sleep(7)  # Wait for page to load
+        while True:
+            try:
+                logging.info('Getting Load more button')
+                load_more_button = self.driver.find_element(By.CSS_SELECTOR, '.load-more-content')
+                logging.info('Load more button found')
+                if load_more_button:
+                    page_source_before = self.driver.page_source
+                    ActionChains(self.driver).move_to_element(load_more_button).click(load_more_button).perform()
+                    logging.info("Clicked 'Load More' button")
+                    time.sleep(2)  # Wait for new content to load
+                    
+                    # Scroll a little bit
+                    self.driver.execute_script("window.scrollBy(0, 500);")
+                    time.sleep(2)  # Wait for the page to scroll
+                    
+                    page_source_after = self.driver.page_source
+                    if page_source_before == page_source_after:
+                        logging.info("No new content loaded. Exiting loop.")
+                        break
+            except NoSuchElementException:
+                logging.error("No 'Load More' button found. Exiting loop.")
+                break
+            except Exception as e:
+                logging.error("An error occurred: %s", e)
+                break
 
         soup = BeautifulSoup(self.driver.page_source, 'html.parser')
-        links = soup.select('.archive-news a')
-        return [link.get('href') for link in links]
+        links = soup.select('.headline-title a')
+        article_urls = [link.get('href') for link in links]
+        logging.info("Found %d articles after scrolling", len(article_urls))
+        return article_urls
 
     def parse_article(self, article_url):
+        logging.info("Parsing article: %s", article_url)
+        self.driver.get(article_url)
         soup = self.fetch_page(article_url)
         if soup is None:
-            logging.error(f"Failed to fetch article page: {article_url}")
+            logging.error("Failed to fetch article page: %s", article_url)
             return None
 
         try:
-            headline = soup.find('h1')
-            headline_text = headline.text.strip() if headline else ''
+            if '/video/' in article_url:
+                headline = soup.select_one('h1').text if soup.select_one('h1') else ''
+                category = 'video'
+                article = {
+                    'url': article_url,
+                    'headline': headline,
+                    'category': category
+                }
+                logging.info("Parsed video article: %s", article_url)
+                return article
 
-            finding_date = soup.select('.post-text p')
-            publication_date = finding_date[1].text.strip() if len(finding_date) > 1 else ''
-
-            article_description = soup.select_one('article')
-            content = article_description.text.strip() if article_description else ''
-
-            topics = [topic.text.strip() for topic in soup.select('.tag-ul li a')]
-
-            suggested_articles = []
-            for title, link in zip(soup.select('.more-news-single .more-news-single-text h3'), 
-                                   soup.select('.more-news-single a')):
-                suggested_articles.append({
-                    'title': title.text.strip(),
-                    'link': link.get('href')
-                })
-
+            headline = soup.select_one('h1').text if soup.select_one('h1') else ''
+            publication_date = soup.select_one('time span').text.replace('প্রকাশ:', '').strip() if soup.select_one('time span') else ''
+            article_descriptions = soup.select('.story-element-text p')
+            content = ' '.join([article_description.text for article_description in article_descriptions])
+            category = soup.select_one('.print-tags span').text if soup.select_one('.print-tags span') else ''
+            topics = [topic.text for topic in soup.select('.tag-list li a')]
+            suggested_article_titles = [article.text for article in self.driver.find_elements(By.CSS_SELECTOR, '.card-with-image-zoom h3')]
+            suggested_article_links = [article.get_attribute('href') for article in self.driver.find_elements(By.CSS_SELECTOR, '.card-with-image-zoom a')]
             article = {
                 'url': article_url,
-                'headline': headline_text,
+                'headline': headline,
                 'content': content,
                 'publication_date': publication_date,
                 'topics': topics,
-                'suggested_articles': suggested_articles,
-                'crawl_date': datetime.now().isoformat()
+                'suggested_articles_title': suggested_article_titles,
+                'suggested_articles_link': suggested_article_links,
+                'category': category
             }
-
+            logging.info("Parsed article: %s", article_url)
             return article
+
         except Exception as e:
-            logging.error(f"Error parsing article {article_url}: {e}")
+            logging.error("Error parsing article %s: %s", article_url, e)
             return None
 
     def __del__(self):
         if hasattr(self, 'driver'):
             self.driver.quit()
+            logging.info("Web driver quit")
         super().__del__()
 
 def main():
     crawler = ProthomAloCrawler()
     today = datetime.now().date()
+    logging.info("Starting to crawl articles for date: %s", today)
     articles = crawler.get_all_articles_of_date(today)
-    logging.info(f"Crawled {len(articles)} articles from Prothom Alo for {today}")
+    logging.info("Crawled %d articles from Prothom Alo for %s", len(articles), today)
 
     if not crawler.es_available:
         logging.warning("Elasticsearch is not available. Articles were not saved to the database.")
         logging.info("To save articles, ensure Elasticsearch is running and modify the code to connect.")
-
-    # Optionally, you can process or save the articles in a different way here
-    # For example, you could save them to a file:
-    # with open(f'prothom_alo_articles_{today}.txt', 'w', encoding='utf-8') as f:
-    #     for article in articles:
-    #         f.write(f"Headline: {article['headline']}\n")
-    #         f.write(f"URL: {article['url']}\n")
-    #         f.write(f"Content: {article['content'][:500]}...\n\n")
 
 if __name__ == "__main__":
     main()

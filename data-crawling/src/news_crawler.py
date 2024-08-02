@@ -82,9 +82,10 @@ class NewsCrawler(ABC):
             logging.warning("Elasticsearch is not available. Cannot save article.")
             logging.info("To save articles, ensure Elasticsearch is running and modify the code to connect.")
             return
-        
+
         try:
             self.es.index(index='news_articles', body=article)
+            logging.info("Article saved to Elasticsearch")
         except Exception as e:
             logging.error(f"Error saving article to Elasticsearch: {e}")
     
