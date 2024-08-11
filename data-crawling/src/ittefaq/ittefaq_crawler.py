@@ -59,8 +59,9 @@ class IttefaqCrawler(NewsCrawler):
             article_descriptions = soup.find('article').text if soup.find('article') else ''
             topics = soup.find('div', class_='topic_list').text if soup.find('div', class_='topic_list') else ''
             publication_date = soup.find('span', class_='tts_time').text if soup.find('span', class_='tts_time') else ''
-            suggested_article_titles = soup.find('a', class_='link_overlay')
-            suggested_article_links = 'https:' + suggested_article_titles.get('href') if suggested_article_titles else ''
+            suggested_article_titles = soup.find('a', class_='link_overlay').text
+            suggested_article_link_source = soup.find('a', class_='link_overlay') # to get the article link
+            suggested_article_links = 'https:' + suggested_article_link_source.get('href') if suggested_article_titles else ''
             logging.info(f'Article fetched: {headline}')
             return {
                 'headline': headline,
@@ -89,7 +90,7 @@ class IttefaqCrawler(NewsCrawler):
         for article in articles:
             try:
                 self.save_to_elasticsearch(article)
-                logging.info(f"Saved article: {article['title']}")
+                logging.info(f"Saved article: {article['headline']}")
             except Exception as e:
                 logging.error(f"Error saving article to Elasticsearch: {e}")
         logging.info('Crawling Completed')
