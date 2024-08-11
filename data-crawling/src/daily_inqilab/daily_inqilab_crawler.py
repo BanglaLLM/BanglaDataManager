@@ -66,7 +66,8 @@ class DailyInqilabCrawler(NewsCrawler):
 
     def parse_article_content(self, soup):
         article_descriptions = soup.select('.new-details .description p')
-        return [desc.text for desc in article_descriptions]
+        descriptions = ' '.join([desc.text for desc in article_descriptions])
+        return descriptions
 
     def parse_suggested_links(self, soup):
         exclude_urls = [
@@ -83,7 +84,9 @@ class DailyInqilabCrawler(NewsCrawler):
             'জাতীয়',
             'অনলাইন ডেস্ক',
             'HTML Comment Box',
-            'আরও'
+            'আরও',
+            "মহানগর",
+            ""
         ]
         titles = [title.text.strip() for title in soup.select('.mt-3 a') if title.text.strip() not in exclude_titles]
         return titles
