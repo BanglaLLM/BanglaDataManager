@@ -86,9 +86,14 @@ class DailyInqilabCrawler(NewsCrawler):
             'HTML Comment Box',
             'আরও',
             "মহানগর",
-            ""
+            "",
+            "পরিবর্তন",
+            " "	
         ]
-        titles = [title.text.strip() for title in soup.select('.mt-3 a') if title.text.strip() not in exclude_titles]
+        titles = [
+            title.text.strip() for title in soup.select('.mt-3 a')
+            if title.text.strip() not in exclude_titles and len(title.text.strip().split()) >= 4
+        ]
         return titles
 
     def parse_article(self, article_url):
@@ -101,14 +106,20 @@ class DailyInqilabCrawler(NewsCrawler):
         suggested_article_links = self.parse_suggested_links(soup) if soup.select('.mt-3 a') else ""
         suggested_article_titles = self.parse_suggested_titles(soup) if soup.select('.mt-3 a') else ""
         
+        suggested_articles = []
+        for title, link in zip(suggested_article_titles, suggested_article_links):
+            suggested_articles.append({
+                'title': title,
+                'link': link
+            })
+
         logging.info("Article parsed successfully: %s", article_url)
         return {
             "headline": headline,
             "content": article_content,
             "publication_date": publication_date,
             "category": category,
-            "suggested_article_links": suggested_article_links,
-            "suggested_article_titles": suggested_article_titles,
+            'suggested_articles': suggested_articles,
             'crawl_date': datetime.now().isoformat()
         }
 
