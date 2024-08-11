@@ -51,7 +51,7 @@ class KalerKonthoCrawler(NewsCrawler):
             article = {
                 'url': article_url,
                 'headline': headline_text,
-                'content': content,
+                'article_descriptions': content,
                 'publication_date': pub_date,
                 'topics': topics,
                 'suggested_articles': suggested_articles,
