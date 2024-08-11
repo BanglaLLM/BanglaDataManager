@@ -98,7 +98,8 @@ class ProthomAloCrawler(NewsCrawler):
                 'topics': topics,
                 'suggested_articles_title': suggested_article_titles,
                 'suggested_articles_link': suggested_article_links,
-                'category': category
+                'category': category,
+                'crawl_date': datetime.now().isoformat()
             }
             logging.info("Parsed article: %s", article_url)
             return article

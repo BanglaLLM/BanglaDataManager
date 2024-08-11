@@ -47,7 +47,8 @@ class NoyaDigontoCrawler(NewsCrawler):
                 'article_descriptions': ' '.join([desc.text for desc in soup.select('.news-content')]),
                 'suggested_article_titles': [title.text for title in soup.select('strong')],
                 'suggested_article_links': [link.get('href') for link in soup.select('.news-title h3 a')],
-                'category': [cat.text for cat in soup.select('.breadcrumb li a')]
+                'category': [cat.text for cat in soup.select('.breadcrumb li a')],
+                'crawl_date': datetime.now().isoformat()
             }
             logging.info(f"Successfully parsed article: {article_url}")
             return article_data

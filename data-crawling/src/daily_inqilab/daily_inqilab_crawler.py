@@ -108,7 +108,8 @@ class DailyInqilabCrawler(NewsCrawler):
             "publication_date": publication_date,
             "category": category,
             "suggested_article_links": suggested_article_links,
-            "suggested_article_titles": suggested_article_titles
+            "suggested_article_titles": suggested_article_titles,
+            'crawl_date': datetime.now().isoformat()
         }
 
     def crawl(self):

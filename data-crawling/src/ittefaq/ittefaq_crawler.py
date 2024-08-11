@@ -69,7 +69,8 @@ class IttefaqCrawler(NewsCrawler):
                 'topics': topics,
                 'publication_date': publication_date,
                 'suggested_article_titles': suggested_article_titles,
-                'suggested_article_links': suggested_article_links
+                'suggested_article_links': suggested_article_links,
+                'crawl_date': datetime.now().isoformat()
             }
         except Exception as e:
             logging.error(f"Error fetching article data from {url}: {e}")
