@@ -65,7 +65,6 @@ class AmarSangbandCrawler(NewsCrawler):
                     'article_descriptions': article_descriptions,
                     'suggested_articles': suggested_articles,
                     'topics': topics,
-
                     'crawl_date': datetime.now().isoformat()
                 }
                 logging.info(f"Successfully parsed article: {article_url}")
