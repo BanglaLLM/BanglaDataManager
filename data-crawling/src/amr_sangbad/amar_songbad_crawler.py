@@ -44,14 +44,28 @@ class AmarSangbandCrawler(NewsCrawler):
         logging.info(f"Parsing article: {article_url}")
         try:
             soup = self.fetch_page(article_url)
+            headline = soup.find('h1').text if soup.find('h1') else ''
+            publication_date = soup.select('.post-text p')[1].text if len(soup.select('.post-text p')) > 1 else ''
+            article_descriptions = soup.select_one('article').text if soup.select_one('article') else ''
+            topics = [topic.text for topic in soup.select('.tag-ul li a')]
+            suggested_article_titles = [title.text for title in soup.select('.more-news-single .more-news-single-text h3')]
+            suggested_article_links = [link.get('href') for link in soup.select('.more-news-single a')]
+            
+            suggested_articles = []
+            for title, link in zip(suggested_article_titles, suggested_article_links):
+                suggested_articles.append({
+                    'title': title,
+                    'link': link
+                })
+
             if soup:
                 article_data = {
-                    'headline': soup.find('h1').text if soup.find('h1') else '',
-                    'publication_date': soup.select('.post-text p')[1].text if len(soup.select('.post-text p')) > 1 else '',
-                    'article_descriptions': soup.select_one('article').text if soup.select_one('article') else '',
-                    'topics': [topic.text for topic in soup.select('.tag-ul li a')],
-                    'suggested_article_titles': [title.text for title in soup.select('.more-news-single .more-news-single-text h3')],
-                    'suggested_article_links': [link.get('href') for link in soup.select('.more-news-single a')]
+                    'headline': headline,
+                    'publication_date': publication_date,
+                    'article_descriptions': article_descriptions,
+                    'suggested_articles': suggested_articles,
+                    'topics': topics,
+                    'crawl_date': datetime.now().isoformat()
                 }
                 logging.info(f"Successfully parsed article: {article_url}")
                 return article_data

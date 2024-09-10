@@ -41,13 +41,28 @@ class NoyaDigontoCrawler(NewsCrawler):
         logging.info(f"Parsing article: {article_url}")
         soup = self.fetch_page(article_url)
         if soup:
+            headline = soup.select_one('.headline').text if soup.select_one('.headline') else ''
+            publication_date = soup.select_one('.article-info ul li').find_next('li').text if soup.select_one('.article-info ul li') else ''
+            article_descriptions = ' '.join([desc.text for desc in soup.select('.news-content')])
+            suggested_article_titles = [title.text for title in soup.select('strong')]
+            suggested_article_links = [link.get('href') for link in soup.select('.news-title h3 a')]
+            category = [cat.text for cat in soup.select('.breadcrumb li a')]
+            
+            suggested_articles = []
+            for title, link in zip(suggested_article_titles, suggested_article_links):
+                suggested_articles.append({
+                    'title': title,
+                    'link': link
+                })
+
             article_data = {
-                'headline': soup.select_one('.headline').text if soup.select_one('.headline') else '',
-                'publication_date': soup.select_one('.article-info ul li').find_next('li').text if soup.select_one('.article-info ul li') else '',
-                'article_descriptions': [desc.text for desc in soup.select('.news-content')],
-                'suggested_article_titles': [title.text for title in soup.select('strong')],
-                'suggested_article_links': [link.get('href') for link in soup.select('.news-title h3 a')],
-                'category': [cat.text for cat in soup.select('.breadcrumb li a')]
+                'headline': headline,
+                'publication_date': publication_date,
+                'article_descriptions': article_descriptions,
+                'suggested_articles': suggested_articles,
+                'suggested_article_links': suggested_article_links,
+                'category': category,
+                'crawl_date': datetime.now().isoformat()
             }
             logging.info(f"Successfully parsed article: {article_url}")
             return article_data

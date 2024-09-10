@@ -57,18 +57,27 @@ class IttefaqCrawler(NewsCrawler):
             soup = BeautifulSoup(response.text, 'html.parser')
             headline = soup.find('h1', class_='title').text if soup.find('h1', class_='title') else ''
             article_descriptions = soup.find('article').text if soup.find('article') else ''
-            topics = soup.find('div', class_='topic_list').text if soup.find('div', class_='topic_list') else ''
+            topics = [topic.text for topic in soup.find_all('div', class_='topic_list')] if soup.find('div', class_='topic_list') else []
             publication_date = soup.find('span', class_='tts_time').text if soup.find('span', class_='tts_time') else ''
-            suggested_article_titles = soup.find('a', class_='link_overlay')
-            suggested_article_links = 'https:' + suggested_article_titles.get('href') if suggested_article_titles else ''
+            suggested_article_titles = [title.text for title in soup.find_all('a', class_='link_overlay')]
+            suggested_article_links = ['https:' + link.get('href') for link in soup.find_all('a', class_='link_overlay')] if suggested_article_titles else []
+
+            suggested_articles = []
+            for title, link in zip(suggested_article_titles, suggested_article_links):
+                suggested_articles.append({
+                    'title': title,
+                    'link': link
+                })
+
             logging.info(f'Article fetched: {headline}')
             return {
+                'url': url,
                 'headline': headline,
                 'article_descriptions': article_descriptions,
                 'topics': topics,
                 'publication_date': publication_date,
-                'suggested_article_titles': suggested_article_titles,
-                'suggested_article_links': suggested_article_links
+                'suggested_articles': suggested_articles,
+                'crawl_date': datetime.now().isoformat()
             }
         except Exception as e:
             logging.error(f"Error fetching article data from {url}: {e}")
@@ -89,7 +98,7 @@ class IttefaqCrawler(NewsCrawler):
         for article in articles:
             try:
                 self.save_to_elasticsearch(article)
-                logging.info(f"Saved article: {article['title']}")
+                logging.info(f"Saved article: {article['headline']}")
             except Exception as e:
                 logging.error(f"Error saving article to Elasticsearch: {e}")
         logging.info('Crawling Completed')

@@ -90,15 +90,24 @@ class ProthomAloCrawler(NewsCrawler):
             topics = [topic.text for topic in soup.select('.tag-list li a')]
             suggested_article_titles = [article.text for article in self.driver.find_elements(By.CSS_SELECTOR, '.card-with-image-zoom h3')]
             suggested_article_links = [article.get_attribute('href') for article in self.driver.find_elements(By.CSS_SELECTOR, '.card-with-image-zoom a')]
+
+            suggested_articles = []
+            for title, link in zip(suggested_article_titles, suggested_article_links):
+                suggested_articles.append({
+                    'title': title,
+                    'link': link
+                })
+
+
             article = {
                 'url': article_url,
                 'headline': headline,
                 'content': content,
                 'publication_date': publication_date,
                 'topics': topics,
-                'suggested_articles_title': suggested_article_titles,
-                'suggested_articles_link': suggested_article_links,
-                'category': category
+                'suggested_articles': suggested_articles,
+                'category': category,
+                'crawl_date': datetime.now().isoformat()
             }
             logging.info("Parsed article: %s", article_url)
             return article
