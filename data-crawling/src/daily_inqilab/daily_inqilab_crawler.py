@@ -65,7 +65,7 @@ class DailyInqilabCrawler(NewsCrawler):
         return all_articles_urls
 
     def parse_article_content(self, soup):
-        article_descriptions = soup.select('.new-details .description p')
+        article_descriptions = soup.select('.new-details .description')
         descriptions = ' '.join([desc.text for desc in article_descriptions])
         return descriptions
 
@@ -100,7 +100,7 @@ class DailyInqilabCrawler(NewsCrawler):
         logging.info("Parsing article: %s", article_url)
         soup = self.fetch_page(article_url)
         headline = soup.select_one('.col-md-9 h2').text if soup.select_one('.col-md-9 h2') else ""
-        article_content = self.parse_article_content(soup) if soup.select('.new-details .description p') else ""    
+        article_content = self.parse_article_content(soup) if soup.select('.new-details .description') else ""
         publication_date = soup.select_one('.news-date-time').text if soup.select_one('.news-date-time') else ""
         category = soup.select_one('.col-md-9 p a').text if soup.select_one('.col-md-9 p a') else ""
         suggested_article_links = self.parse_suggested_links(soup) if soup.select('.mt-3 a') else ""
