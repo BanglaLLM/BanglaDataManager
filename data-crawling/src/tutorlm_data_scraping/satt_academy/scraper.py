@@ -32,7 +32,7 @@ from crawl4ai import AsyncWebCrawler
 
 from .config import (
     BASE_URL,
-    DHAKA_UNIVERSITY_SLUG,
+    DEFAULT_UNIVERSITY_SLUG,
     UNIVERSITY_CATEGORIES,
     REQUEST_DELAY_MIN,
     REQUEST_DELAY_MAX,
@@ -40,6 +40,7 @@ from .config import (
     BACKOFF_MAX,
     MAX_RETRIES,
     COOLDOWN_AFTER_ERRORS,
+    COOLDOWN_BETWEEN_UNIS,
     OUTPUT_DIR,
 )
 from .session_manager import (
@@ -83,10 +84,15 @@ def setup_logging(output_dir: str):
 FETCH_TIMEOUT = 45
 
 
+
+# Single combined output filename for all universities
+OUTPUT_FILENAME = "satt_academy_admission_questions.jsonl"
+
+
 class SattAdmissionScraper:
     """Scrapes admission questions from Satt Academy using crawl4ai."""
 
-    def __init__(self, university_slug: str = DHAKA_UNIVERSITY_SLUG, output_dir: str = None):
+    def __init__(self, university_slug: str = DEFAULT_UNIVERSITY_SLUG, output_dir: str = None):
         self.university_slug = university_slug
         self.category_id = UNIVERSITY_CATEGORIES.get(university_slug)
         if not self.category_id:
@@ -104,7 +110,7 @@ class SattAdmissionScraper:
         self.crawler = None
         self._consecutive_errors = 0
 
-        # Resume support
+        # Resume support — per-university progress file
         self._progress_file = os.path.join(self.output_dir, f"{university_slug}_progress.json")
         self._completed_exams = self._load_progress()
 
@@ -123,7 +129,7 @@ class SattAdmissionScraper:
             json.dump({"completed_exams": list(self._completed_exams)}, f)
 
     def _save_questions(self, questions: list, exam_info: dict):
-        output_file = os.path.join(self.output_dir, f"{self.university_slug}_questions.jsonl")
+        output_file = os.path.join(self.output_dir, OUTPUT_FILENAME)
         with open(output_file, "a", encoding="utf-8") as f:
             for q in questions:
                 record = {
@@ -426,21 +432,109 @@ class SattAdmissionScraper:
             logger.info(f"Exams scraped: {len(remaining)}")
             logger.info(f"MCQ questions: {total_mcq}")
             logger.info(f"Written questions: {total_written}")
-            output_file = os.path.join(self.output_dir, f"{self.university_slug}_questions.jsonl")
+            output_file = os.path.join(self.output_dir, OUTPUT_FILENAME)
             logger.info(f"Output: {output_file}")
             logger.info(f"{'='*60}")
+
+
+async def run_all_universities(output_dir: str = None, fresh: bool = False):
+    """Scrape all universities sequentially, sharing a single browser session."""
+    out = output_dir or OUTPUT_DIR
+    os.makedirs(out, exist_ok=True)
+    setup_logging(out)
+
+    if fresh:
+        # Clear combined JSONL
+        combined = os.path.join(out, OUTPUT_FILENAME)
+        if os.path.exists(combined):
+            os.remove(combined)
+            logger.info(f"Cleared old combined output: {combined}")
+        # Clear all per-university progress files
+        for slug in UNIVERSITY_CATEGORIES:
+            pf = os.path.join(out, f"{slug}_progress.json")
+            if os.path.exists(pf):
+                os.remove(pf)
+        logger.info("Cleared all progress files.")
+
+    slugs = list(UNIVERSITY_CATEGORIES.keys())
+    grand_mcq = 0
+    grand_written = 0
+    grand_exams = 0
+
+    logger.info(f"{'='*60}")
+    logger.info(f"SCRAPING ALL {len(slugs)} UNIVERSITIES")
+    logger.info(f"{'='*60}")
+
+    for idx, slug in enumerate(slugs):
+        logger.info(f"\n{'#'*60}")
+        logger.info(f"# [{idx+1}/{len(slugs)}] UNIVERSITY: {slug}")
+        logger.info(f"{'#'*60}")
+
+        try:
+            scraper = SattAdmissionScraper(
+                university_slug=slug,
+                output_dir=output_dir,
+            )
+            await scraper.run()
+
+            # Tally (read back from progress)
+            pf = os.path.join(out, f"{slug}_progress.json")
+            if os.path.exists(pf):
+                with open(pf) as f:
+                    data = json.load(f)
+                    grand_exams += len(data.get("completed_exams", []))
+
+        except Exception as e:
+            logger.error(f"Failed on {slug}: {type(e).__name__}: {e}")
+            logger.info("Continuing to next university...")
+
+        # Cooldown between universities
+        if idx < len(slugs) - 1:
+            logger.info(f"Cooling down {COOLDOWN_BETWEEN_UNIS}s before next university...")
+            await asyncio.sleep(COOLDOWN_BETWEEN_UNIS)
+
+    # Count total lines in combined output
+    combined = os.path.join(out, OUTPUT_FILENAME)
+    total_lines = 0
+    if os.path.exists(combined):
+        with open(combined) as f:
+            total_lines = sum(1 for _ in f)
+
+    logger.info(f"\n{'='*60}")
+    logger.info(f"ALL UNIVERSITIES COMPLETE at {datetime.now():%Y-%m-%d %H:%M:%S}")
+    logger.info(f"{'='*60}")
+    logger.info(f"Universities attempted: {len(slugs)}")
+    logger.info(f"Total questions in output: {total_lines}")
+    logger.info(f"Output: {combined}")
+    logger.info(f"{'='*60}")
 
 
 def main():
     parser = argparse.ArgumentParser(
         description="Scrape admission questions from Satt Academy"
     )
-    parser.add_argument(
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
         "--university",
         type=str,
-        default=DHAKA_UNIVERSITY_SLUG,
         choices=list(UNIVERSITY_CATEGORIES.keys()),
-        help="University slug to scrape (default: dhaka-university)",
+        help="Scrape a single university",
+    )
+    group.add_argument(
+        "--all",
+        action="store_true",
+        help="Scrape ALL universities (37 total)",
+    )
+    group.add_argument(
+        "--verify",
+        action="store_true",
+        help="Verify saved session is still valid",
+    )
+    group.add_argument(
+        "--list",
+        action="store_true",
+        dest="list_unis",
+        help="List all available university slugs",
     )
     parser.add_argument(
         "--output-dir",
@@ -451,24 +545,33 @@ def main():
     parser.add_argument(
         "--fresh",
         action="store_true",
-        help="Start fresh (ignore previous progress)",
-    )
-    parser.add_argument(
-        "--verify",
-        action="store_true",
-        help="Verify saved session is still valid",
+        help="Start fresh (ignore previous progress, clear old output)",
     )
 
     args = parser.parse_args()
+
+    # List mode
+    if args.list_unis:
+        print(f"Available universities ({len(UNIVERSITY_CATEGORIES)}):\n")
+        for slug, cat_id in UNIVERSITY_CATEGORIES.items():
+            print(f"  {slug}  (category_id={cat_id})")
+        return
 
     # Verify mode
     if args.verify:
         asyncio.run(verify_session())
         return
 
-    # Scraping mode
+    # All universities mode
+    if args.all:
+        asyncio.run(run_all_universities(output_dir=args.output_dir, fresh=args.fresh))
+        return
+
+    # Single university mode (default to dhaka-university)
+    slug = args.university or DEFAULT_UNIVERSITY_SLUG
+
     scraper = SattAdmissionScraper(
-        university_slug=args.university,
+        university_slug=slug,
         output_dir=args.output_dir,
     )
 
@@ -476,12 +579,11 @@ def main():
         if os.path.exists(scraper._progress_file):
             os.remove(scraper._progress_file)
             scraper._completed_exams = set()
-            logger.info("Cleared previous progress. Starting fresh.")
-        # Also clear old JSONL
-        jsonl_file = os.path.join(scraper.output_dir, f"{args.university}_questions.jsonl")
-        if os.path.exists(jsonl_file):
-            os.remove(jsonl_file)
-            logger.info("Cleared old JSONL output.")
+            logger.info("Cleared previous progress.")
+        combined = os.path.join(scraper.output_dir, OUTPUT_FILENAME)
+        if os.path.exists(combined):
+            os.remove(combined)
+            logger.info("Cleared old output.")
 
     asyncio.run(scraper.run())
 
